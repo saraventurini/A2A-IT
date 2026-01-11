@@ -719,7 +719,7 @@ RCA_df_selected_bydomain_dict = pickle.load(open(f'RCA_df_selected_bydomain_dict
 entropy_df_selected_bydomain_dict = pickle.load(open(f'entropy_df_selected_bydomain_dict.pkl', "rb"))
 
 RCA_topic_df_selected_all = pd.read_csv("RCA_topic_df_selected.csv.gz", compression="gzip") 
-RCA_topic_df_selected_bydomain_dict = pickle.load(open(f'RCA_topic_df_selected_bydomain_dict.pkl', "rb")) 
+#RCA_topic_df_selected_bydomain_dict = pickle.load(open(f'RCA_topic_df_selected_bydomain_dict.pkl', "rb")) 
 df_topics = pd.read_csv(f'df_topics.csv.gz', compression='gzip')
 topic_id_name_dict = df_topics[['topic_id','topic_name']].set_index('topic_id').to_dict()['topic_name']
 domain_id_name_dict = df_topics[['domain_id','domain_name']].drop_duplicates().set_index('domain_id').to_dict()['domain_name']
@@ -981,7 +981,10 @@ else:
         institutions_impact_weighted_selected = institutions_impact_weighted_selected_bydomain_dict[d]
         institutions_impact_weighted_selected['institution_name'] = institutions_impact_weighted_selected['institution_id'].map(dict_institution_id_name_selected)
         impact_row = institutions_impact_weighted_selected[institutions_impact_weighted_selected.institution_id.isin(set(peers_df_row.institution_id_neighbor).union({institution_id}))]
-        RCA_topic_df_selected = RCA_topic_df_selected_bydomain_dict[d]
+        #RCA_topic_df_selected = RCA_topic_df_selected_bydomain_dict[d]
+        RCA_topic_df_selected = RCA_topic_df_selected_all
+        RCA_topic_df_selected['value'] = (RCA_topic_df_selected.groupby(['institution_id','domain_id_scaled'])['count_specialized_topic'].transform(lambda x: x / x.max()))*100
+        RCA_topic_df_selected.loc[RCA_topic_df_selected.domain_id_scaled!=d,'value'] = 0.0
         RCA_topic_row = RCA_topic_df_selected[RCA_topic_df_selected.institution_id==institution_id]
     else:
         institutions_stats_selected = institutions_stats_selected_all
