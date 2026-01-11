@@ -57,13 +57,15 @@ st.markdown(
 def get_hover_font_color(r, g, b):
     brightness = (299*r + 587*g + 114*b)/1000
     return 'white' if brightness < 128 else 'black'
-def institutions_map_fun(G_z, pos, node_labels, cluster_labels_dict, clusters_colors_dict, highlight_node=None):
+def institutions_map_fun(G_z, pos, node_labels, cluster_labels_dict, clusters_colors_dict, institution_peers_dict, highlight_node=None):
     G_nodes = G_z.nodes()
 
     if highlight_node != None:
         highlight_nodes = {highlight_node}  # single highlight node
+        neighbors = institution_peers_dict[highlight_node]
     else:
          highlight_nodes = {}
+         neighbors = {}
 
     # --- Edges ---
     edge_x, edge_y = [], []
@@ -72,7 +74,8 @@ def institutions_map_fun(G_z, pos, node_labels, cluster_labels_dict, clusters_co
     for edge in G_z.edges():
         x0, y0 = pos[edge[0]]
         x1, y1 = pos[edge[1]]
-        if edge[0] in highlight_nodes or edge[1] in highlight_nodes:
+        # if (edge[0] in highlight_nodes or edge[1] in highlight_nodes):
+        if (edge[0] in highlight_nodes and edge[1] in neighbors) or (edge[1] in highlight_nodes and edge[0] in neighbors):
             highlight_edge_x.extend([x0, x1, None])
             highlight_edge_y.extend([y0, y1, None])
         else:
@@ -92,13 +95,14 @@ def institutions_map_fun(G_z, pos, node_labels, cluster_labels_dict, clusters_co
             hoverinfo='none', mode='lines'
         )
 
-        # --- Neighbors ---
-        neighbors = set()
-        for n in highlight_nodes:
-            neighbors.update(G_z.neighbors(n))
-        neighbors -= highlight_nodes
-    else:
-        neighbors = {}
+        # # --- Neighbors ---
+        # neighbors = set()
+        # for n in highlight_nodes:
+        #     neighbors.update(G_z.neighbors(n))
+        # neighbors -= highlight_nodes
+        # neighbors = institution_peers_dict[highlight_node]
+    # else:
+    #     neighbors = {}
 
     # --- Nodes ---
     node_x, node_y, node_color, node_hover = [], [], [], []
@@ -163,7 +167,7 @@ def institutions_map_fun(G_z, pos, node_labels, cluster_labels_dict, clusters_co
     neighbor_trace = go.Scatter(
         x=neighbor_x, y=neighbor_y, mode='markers',
         hoverinfo='text', text=neighbor_hover,
-        marker=dict(color=neighbor_color, size=8, line=dict(width=1, color='gray')),
+        marker=dict(color=neighbor_color, size=8, line=dict(width=2, color='gray')),
         hoverlabel=dict(
             bgcolor=neighbor_color,
             font=dict(color=neighbor_hover_colors, size=16)
@@ -181,7 +185,7 @@ def institutions_map_fun(G_z, pos, node_labels, cluster_labels_dict, clusters_co
             x=highlight_x, y=highlight_y,
             hoverinfo='text', text=highlight_hover,
             textposition='top center',
-            marker=dict(color=highlight_color, size=13, line=dict(width=1, color='black')),
+            marker=dict(color=highlight_color, size=15, line=dict(width=2, color='black')),
             hoverlabel=dict(
                 bgcolor=highlight_color,
                 font=dict(color=highlight_hover_colors, size=16)
@@ -576,7 +580,8 @@ def jitter_impact_fun(temp, highlight_institution):
         tickfont=dict(size=20,color='black')
     )
     
-    years = list(range(2014, 2025))
+    years = list(set(temp.year))
+    years.sort()
     fig.update_yaxes(
         showgrid=True,
         gridcolor='lightgray',
@@ -691,19 +696,30 @@ with open(f'dict_institution_id_name.pkl', "rb") as f:
     dict_institution_id_name = pickle.load(f)
 
 with open(f'network_data_k{10}_period{3}.pkl', "rb") as f:
-    [G, pos, node_labels, community_labels_dict, community_colors_dict] = pickle.load(f)
+    [G_all, pos_all, node_labels_all, community_labels_dict_all, community_colors_dict_all] = pickle.load(f)
+network_data_bydomain_dict = pickle.load(open(f'network_data_k{10}_period{3}_bydomain_dict.pkl', "rb"))
 
 #institutions_stats_periods_selected = pd.read_csv("institutions_stats_periods_selected.csv.gz", compression="gzip")
-institutions_stats_selected = pd.read_csv("institutions_stats_selected.csv.gz", compression="gzip")
+institutions_stats_selected_all = pd.read_csv("institutions_stats_selected.csv.gz", compression="gzip")
+institutions_stats_selected_bydomain_dict = pickle.load(open(f'institutions_stats_selected_bydomain_dict.pkl', "rb"))
+
 institutions_relationships_df_selected = pd.read_csv("institutions_relationships_df_selected.csv.gz", compression="gzip")
-edges_df_selected = pd.read_csv("edges_df_selected.csv.gz", compression="gzip")
-edges_df_selected['institution_name_neighbor'] = edges_df_selected['institution_id_neighbor'].map(dict_institution_id_name_selected)
+edges_df_selected_all = pd.read_csv("edges_df_selected.csv.gz", compression="gzip")
+edges_df_selected_all['institution_name_neighbor'] = edges_df_selected_all['institution_id_neighbor'].map(dict_institution_id_name_selected)
+edges_df_selected_all['institution_id_scaled2'] = edges_df_selected_all['institution_id'].map(dict_institution_id_institution_id_scaled2_selected)
+edges_df_selected_all['institution_id_scaled2_neighbor'] = edges_df_selected_all['institution_id_neighbor'].map(dict_institution_id_institution_id_scaled2_selected)
+institution_peers_dict_all = edges_df_selected_all.groupby(['institution_id_scaled2']).institution_id_scaled2_neighbor.apply(set).to_dict()
+edges_df_selected_bydomain_dict = pickle.load(open(f'edges_df_selected_bydomain_dict.pkl', "rb"))
+institution_peers_dict_bydomain_dict = pickle.load(open(f'institution_peers_dict_bydomain_dict.pkl', "rb"))
 
-RCA_df_selected = pd.read_csv("RCA_df_selected.csv.gz", compression="gzip") 
-entropy_df_selected = pd.read_csv("entropy_df_selected.csv.gz", compression="gzip") 
-entropy_min, entropy_max = entropy_df_selected.disorder_index.min(),entropy_df_selected.disorder_index.max()
+RCA_df_selected_all = pd.read_csv("RCA_df_selected.csv.gz", compression="gzip") 
+entropy_df_selected_all = pd.read_csv("entropy_df_selected.csv.gz", compression="gzip") 
+#entropy_min_all, entropy_max_all = entropy_df_selected_all.disorder_index.min(),entropy_df_selected_all.disorder_index.max()
+RCA_df_selected_bydomain_dict = pickle.load(open(f'RCA_df_selected_bydomain_dict.pkl', "rb"))
+entropy_df_selected_bydomain_dict = pickle.load(open(f'entropy_df_selected_bydomain_dict.pkl', "rb"))
 
-RCA_topic_df_selected = pd.read_csv("RCA_topic_df_selected.csv.gz", compression="gzip") 
+RCA_topic_df_selected_all = pd.read_csv("RCA_topic_df_selected.csv.gz", compression="gzip") 
+RCA_topic_df_selected_bydomain_dict = pickle.load(open(f'RCA_topic_df_selected_bydomain_dict.pkl', "rb")) 
 df_topics = pd.read_csv(f'df_topics.csv.gz', compression='gzip')
 topic_id_name_dict = df_topics[['topic_id','topic_name']].set_index('topic_id').to_dict()['topic_name']
 domain_id_name_dict = df_topics[['domain_id','domain_name']].drop_duplicates().set_index('domain_id').to_dict()['domain_name']
@@ -733,8 +749,25 @@ def blend_white_to_color(intensity, base_rgb):
     b = 255 - intensity * (255 - base_rgb[2])
     return f'rgb({int(r)}, {int(g)}, {int(b)})'
 
-institutions_impact_weighted_selected = pd.read_csv("institutions_impact_weighted_selected.csv.gz", compression="gzip")
+institutions_impact_weighted_selected_all = pd.read_csv("institutions_impact_weighted_selected.csv.gz", compression="gzip")
+institutions_impact_weighted_selected_bydomain_dict = pickle.load(open(f'institutions_impact_weighted_selected_bydomain_dict.pkl', "rb"))
+
+domain_color_map = {
+    "Health Sciences": "rgba(34,63,115,1)",
+    "Life Sciences": "rgba(147,207,189,1)",
+    "Physical Sciences": "rgba(81,128,177,1)",
+    "Social Sciences": "rgba(98,168,183,1)"
+}
+
+## default all domains
+RCA_df_selected, entropy_df_selected = RCA_df_selected_all, entropy_df_selected_all
+entropy_min, entropy_max = entropy_df_selected.disorder_index.min(),entropy_df_selected.disorder_index.max()
+[G, pos, node_labels, community_labels_dict, community_colors_dict] = [G_all, pos_all, node_labels_all, community_labels_dict_all, community_colors_dict_all]
+edges_df_selected, institution_peers_dict = edges_df_selected_all, institution_peers_dict_all
+institutions_impact_weighted_selected = institutions_impact_weighted_selected_all
 institutions_impact_weighted_selected['institution_name'] = institutions_impact_weighted_selected['institution_id'].map(dict_institution_id_name_selected)
+institutions_stats_selected = institutions_stats_selected_all
+RCA_topic_df_selected = RCA_topic_df_selected_all
 
 # ----------------------------
 # CENTERED TITLE
@@ -766,7 +799,7 @@ institution_name = st.selectbox(
 # SHOW PLOT ONLY WHEN NO SELECTION
 # ----------------------------
 if institution_name == "":
-    fig = institutions_map_fun(G, pos, node_labels, community_labels_dict, community_colors_dict, highlight_node=None)
+    fig = institutions_map_fun(G, pos, node_labels, community_labels_dict, community_colors_dict, institution_peers_dict, highlight_node=None)
     col1, col2, col3 = st.columns([1.3, 2, 1]) ## center
     with col2:
         st.plotly_chart(fig, use_container_width=False)
@@ -780,7 +813,7 @@ else:
     stats_row = institutions_stats_selected[institutions_stats_selected.institution_id==institution_id]
     relationships_row = institutions_relationships_df_selected[institutions_relationships_df_selected.institution_id==institution_id]
     edges_df_row = edges_df_selected[edges_df_selected.institution_id==institution_id]
-    peers_df_row = edges_df_row[['institution_id_neighbor','institution_name_neighbor','similarity_score']].sort_values(by='similarity_score',ascending=False).head(10).copy().sort_values('similarity_score', ascending=False)
+    peers_df_row = edges_df_row[['institution_id_neighbor','institution_name_neighbor','similarity_score']].sort_values(by='similarity_score',ascending=False).head(20).copy().sort_values('similarity_score', ascending=False)
 
     RCA_df_row = RCA_df_selected[(RCA_df_selected.institution_id==institution_id) & (RCA_df_selected.period_id==3)]
     entropy_df_row = entropy_df_selected[entropy_df_selected.institution_id==institution_id]
@@ -815,6 +848,27 @@ else:
                 st.map(map_df, color='#000066')
 
     with col3:
+
+        # if not info_row.empty:
+        #     type = info_row.iloc[0]['type'] 
+        #     if not pd.isna(type):
+        #         st.markdown(f"""
+        #         <div style="
+        #             padding: 20px;
+        #             border-radius: 10px;
+        #             background-color: #000066;
+        #             text-align: center;
+        #             display: flex;
+        #             flex-direction: column;
+        #             justify-content: center;
+        #             align-items: center;
+        #             min-height: 120px;
+        #             margin-bottom: 20px;
+        #         ">
+        #             <h4 style="color: white; margin: 0 0 10px 0; font-size: 20px;">Type</h4>
+        #             <p style="color: white; font-size: 36px; margin: 0; font-weight: bold;">{type}</p>
+        #         </div>
+        #         """, unsafe_allow_html=True)
         if not info_row.empty:
             research_level = info_row.iloc[0]['research_level'] 
             if not pd.isna(research_level):
@@ -891,13 +945,71 @@ else:
                 for child in children_list:
                     st.markdown(f"<div style='font-size: 16px; margin-left: 20px; margin-bottom: 5px;'>• {child}</div>", unsafe_allow_html=True)
 
+
+    # Create the selection dropdown
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    view_option = st.selectbox(
+        "Select a domain",
+        options=["All", "Health Sciences", "Life Sciences", "Physical Sciences", "Social Sciences"],
+        index=0  # Default to "All"
+    )
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    if view_option != 'All':
+        if view_option == "Life Sciences":
+            d = 0
+        elif view_option == "Social Sciences":
+            d = 1
+        elif view_option == "Physical Sciences":
+            d = 2
+        elif view_option == "Health Sciences":
+            d = 3
+        institutions_stats_selected = institutions_stats_selected_bydomain_dict[d]
+        stats_row = institutions_stats_selected[institutions_stats_selected.institution_id==institution_id]
+        RCA_df_selected, entropy_df_selected = RCA_df_selected_bydomain_dict[d], entropy_df_selected_bydomain_dict[d]
+        RCA_df_row = RCA_df_selected[(RCA_df_selected.institution_id==institution_id) & (RCA_df_selected.period_id==3)]
+        entropy_df_row = entropy_df_selected[entropy_df_selected.institution_id==institution_id]
+        entropy_min, entropy_max = entropy_df_selected.disorder_index.min(),entropy_df_selected.disorder_index.max()
+        [G, pos, node_labels, community_labels_dict, community_colors_dict] = network_data_bydomain_dict[d]
+        edges_df_selected, institution_peers_dict = edges_df_selected_bydomain_dict[d], institution_peers_dict_bydomain_dict[d]
+        edges_df_selected['institution_name_neighbor'] = edges_df_selected['institution_id_neighbor'].map(dict_institution_id_name_selected)
+        edges_df_selected['institution_id_scaled2'] = edges_df_selected['institution_id'].map(dict_institution_id_institution_id_scaled2_selected)
+        edges_df_selected['institution_id_scaled2_neighbor'] = edges_df_selected['institution_id_neighbor'].map(dict_institution_id_institution_id_scaled2_selected)
+        edges_df_row = edges_df_selected[edges_df_selected.institution_id==institution_id]
+        peers_df_row = edges_df_row[['institution_id_neighbor','institution_name_neighbor','similarity_score']].sort_values(by='similarity_score',ascending=False).head(20).copy().sort_values('similarity_score', ascending=False)
+        institutions_impact_weighted_selected = institutions_impact_weighted_selected_bydomain_dict[d]
+        institutions_impact_weighted_selected['institution_name'] = institutions_impact_weighted_selected['institution_id'].map(dict_institution_id_name_selected)
+        impact_row = institutions_impact_weighted_selected[institutions_impact_weighted_selected.institution_id.isin(set(peers_df_row.institution_id_neighbor).union({institution_id}))]
+        RCA_topic_df_selected = RCA_topic_df_selected_bydomain_dict[d]
+        RCA_topic_row = RCA_topic_df_selected[RCA_topic_df_selected.institution_id==institution_id]
+    else:
+        institutions_stats_selected = institutions_stats_selected_all
+        stats_row = institutions_stats_selected[institutions_stats_selected.institution_id==institution_id]
+        RCA_df_selected, entropy_df_selected = RCA_df_selected_all, entropy_df_selected_all
+        RCA_df_row = RCA_df_selected[(RCA_df_selected.institution_id==institution_id) & (RCA_df_selected.period_id==3)]
+        entropy_df_row = entropy_df_selected[entropy_df_selected.institution_id==institution_id]
+        entropy_min, entropy_max = entropy_df_selected.disorder_index.min(),entropy_df_selected.disorder_index.max()
+        [G, pos, node_labels, community_labels_dict, community_colors_dict] = [G_all, pos_all, node_labels_all, community_labels_dict_all, community_colors_dict_all]
+        edges_df_selected, institution_peers_dict = edges_df_selected_all, institution_peers_dict_all
+        edges_df_selected['institution_name_neighbor'] = edges_df_selected['institution_id_neighbor'].map(dict_institution_id_name_selected)
+        edges_df_selected['institution_id_scaled2'] = edges_df_selected['institution_id'].map(dict_institution_id_institution_id_scaled2_selected)
+        edges_df_selected['institution_id_scaled2_neighbor'] = edges_df_selected['institution_id_neighbor'].map(dict_institution_id_institution_id_scaled2_selected)
+        edges_df_row = edges_df_selected[edges_df_selected.institution_id==institution_id]
+        peers_df_row = edges_df_row[['institution_id_neighbor','institution_name_neighbor','similarity_score']].sort_values(by='similarity_score',ascending=False).head(20).copy().sort_values('similarity_score', ascending=False)
+        institutions_impact_weighted_selected = institutions_impact_weighted_selected_all
+        institutions_impact_weighted_selected['institution_name'] = institutions_impact_weighted_selected['institution_id'].map(dict_institution_id_name_selected)
+        impact_row = institutions_impact_weighted_selected[institutions_impact_weighted_selected.institution_id.isin(set(peers_df_row.institution_id_neighbor).union({institution_id}))]
+        RCA_topic_df_selected = RCA_topic_df_selected_all
+        RCA_topic_row = RCA_topic_df_selected[RCA_topic_df_selected.institution_id==institution_id]
+
     # Network visualization section
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
     col1_map, col2_map, col3_map = st.columns([0.8, 0.1, 0.8])
     
     with col3_map:
-        fig = institutions_map_fun(G, pos, node_labels, community_labels_dict, community_colors_dict, highlight_node=institution_id_scaled2)
+        fig = institutions_map_fun(G, pos, node_labels, community_labels_dict, community_colors_dict, institution_peers_dict, highlight_node=institution_id_scaled2)
         st.plotly_chart(fig, use_container_width=False)
     with col1_map:
         if not edges_df_row.empty:
@@ -987,12 +1099,13 @@ else:
                 'portfolio_composition': '',
                 'domain_name': 'Domain'
             },
-            color_discrete_sequence=[
-                "rgba(147,207,189,1)",
-                "rgba(98,168,183,1)",
-                "rgba(81,128,177,1)",
-                "rgba(34,63,115,1)"
-            ]
+            color_discrete_map=domain_color_map
+            # color_discrete_sequence=[
+            #     "rgba(147,207,189,1)",
+            #     "rgba(98,168,183,1)",
+            #     "rgba(81,128,177,1)",
+            #     "rgba(34,63,115,1)"
+            # ]
         )
 
         # Update each trace to have hoverlabel matching its bar color and custom text
@@ -1027,7 +1140,7 @@ else:
 
 
         ## embedding
-        if not RCA_topic_row.empty:
+        if (not RCA_topic_row.empty): # and (view_option == 'All'):
             st.markdown("<p style='font-size: 22px;text-align: center; font-weight: bold; margin-bottom: 10px; margin-top: 20px;'>Topic Space</p>", unsafe_allow_html=True)
             fig_topics = topics_embedding_fun(RCA_topic_row,topics_embedding_reduced_df,topics_set,pos_topics,unique_comms,domain_partition,domain_id_name_dict,domain_base_colors,marker_styles)
             col1, col2, col3 = st.columns([1, 5, 1])
@@ -1044,7 +1157,7 @@ else:
         st.markdown("<br>", unsafe_allow_html=True)
         if not impact_row.empty:
             st.markdown("<p style='font-size: 22px;text-align: center; font-weight: bold; margin-bottom: 10px; margin-top: 20px;'>Relative Impact vs Impact Uniformity</p>", unsafe_allow_html=True)
-            fig_jitter = jitter_impact_fun(impact_row,institution_name)
+            fig_jitter = jitter_impact_fun(impact_row[impact_row.year.isin({2014,2016,2018,2020,2022,2024})],institution_name)
             st.plotly_chart(fig_jitter, use_container_width=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
